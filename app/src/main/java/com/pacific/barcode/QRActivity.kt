@@ -1,23 +1,16 @@
 package com.pacific.barcode
 
 import android.content.Intent
-import android.database.Cursor
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.SurfaceHolder
-
 import com.google.zxing.MultiFormatReader
-import com.google.zxing.oned.MultiFormatOneDReader
 import com.pacific.mvc.Activity
 import com.trello.rxlifecycle.ActivityEvent
-
 import rx.Observable
 import rx.android.schedulers.AndroidSchedulers
-import rx.functions.Action1
-import rx.functions.Func1
 import rx.schedulers.Schedulers
-import java.util.*
 
 class QRActivity : Activity<QRModel>() {
     private var cameraManager: BaseCameraManager? = null
@@ -33,7 +26,11 @@ class QRActivity : Activity<QRModel>() {
         model = QRModel(QRView(this))
         model.onCreate()
 
-        cameraManager!!.setOnResultListener { qrResult -> model.resultDialog(qrResult) }
+        BaseCameraManager.setOnResultListener(cameraManager!!, object : BaseCameraManager.OnResultListener {
+            override fun onResult(qrResult: QRResult) {
+                model.resultDialog(qrResult)
+            }
+        })
     }
 
     override fun onResume() {
@@ -60,24 +57,24 @@ class QRActivity : Activity<QRModel>() {
             if (cursor!!.moveToFirst()) {
                 Observable
                         .just(cursor.getString(cursor.getColumnIndex(columns[0])))
-                        .observeOn(Schedulers.from(cameraManager!!.getExecutor()))
+                        .observeOn(Schedulers.from(cameraManager!!.executor))
                         .compose(this.bindUntilEvent(ActivityEvent.PAUSE))
                         .map { str -> QRUtils.decode(str, MultiFormatReader()) }
                         .observeOn(AndroidSchedulers.mainThread())
-                        .subscribe { qrResult -> model.resultDialog(qrResult) }
+                        .subscribe { qrResult -> model.resultDialog(qrResult!!) }
             }
             cursor.close()
         }
     }
 
     fun onSurfaceCreated(surfaceHolder: SurfaceHolder) {
-        if (cameraManager!!.getExecutor().isShutdown) return
+        if (cameraManager!!.executor.isShutdown) return
         Observable
                 .just(surfaceHolder)
                 .compose(this.bindUntilEvent(ActivityEvent.PAUSE))
-                .observeOn(Schedulers.from(cameraManager!!.getExecutor()))
+                .observeOn(Schedulers.from(cameraManager!!.executor))
                 .map { holder ->
-                    cameraManager!!.setRotate(windowManager.defaultDisplay.rotation)
+                    BaseCameraManager.setRotate(cameraManager!!, windowManager.defaultDisplay.rotation)
                     cameraManager!!.connectCamera(holder)
                     null
                 }
@@ -97,7 +94,7 @@ class QRActivity : Activity<QRModel>() {
     }
 
     fun setHook(hook: Boolean) {
-        cameraManager!!.setHook(hook)
+        BaseCameraManager.setHook(cameraManager!!, hook)
     }
 
     companion object {
